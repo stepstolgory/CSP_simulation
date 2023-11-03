@@ -43,6 +43,8 @@ class Mirror():
         y_vals = [point[1] for point in self.rotated_points]
         z_vals = [point[2] for point in self.rotated_points]
         return x_vals, y_vals, z_vals
+    def __str__(self):
+        return(f"Mirror at position ({self.x}, {self.y}, {self.z}), dimension {self.x_len, self.y_len}, rotation about x axis of {Mirror.theta_x} radians, and rotation about y of {Mirror.theta_y} radians")
 
 mirror1 = Mirror(2,3,2,10,7,0.2)
 ax.plot_trisurf(mirror1.plot_values[0], mirror1.plot_values[1], mirror1.plot_values[2], color='blue', alpha = mirror1.reflectivity)
@@ -53,4 +55,4 @@ ax.set_xlabel('X')
 ax.set_ylabel('Y')
 ax.set_zlabel('Z')
 plt.show()
-print(mirror1.normal_vector)
+print(mirror1)
