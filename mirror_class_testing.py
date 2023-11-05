@@ -44,7 +44,7 @@ class Grid():
         return mirrors
 
     def __str__(self):
-        return f"A grid of mirror locations limited by equation {self.eq}, size {self.size_x, self.size_y} and {self.mirrors_used} mirrors used."
+        return f"A grid of mirror locations limited by equation '{self.eq}', size {self.size_x, self.size_y} and {self.mirrors_used} mirrors used."
 
 class Mirror():
     def __init__(self, x, y, z, x_len, y_len, theta_x, theta_y, theta_z, reflectivity):
@@ -60,47 +60,60 @@ class Mirror():
         self.theta_y = np.radians(theta_y)
         self.theta_z = np.radians(theta_z)
 
-        self.Rx = np.array([[1,0,0,0],
-                [0, np.cos(self.theta_x), -np.sin(self.theta_x), 0],
-                [0, np.sin(self.theta_x), np.sin(self.theta_x), 0],
-                [0,0,0,1]])
-        self.Ry = np.array([[np.cos(self.theta_y), 0, np.sin(self.theta_y), 0],
-                [0, 1, 0, 0],
-                [-np.sin(self.theta_y), 0, np.cos(self.theta_y), 0],
-                [0,0,0,1]])
-        self.Rz = np.array([[np.cos(self.theta_z), -np.sin(self.theta_z), 0, 0],
-                [np.sin(self.theta_z), np.cos(self.theta_z), 0, 0],
-                [0,0,1,0],
-                [0,0,0,1]])
-
         self.points = np.array([[x,y,z,1],[x-x_len/2,y-y_len/2,z,1],[x-x_len/2, y+y_len/2, z,1],[x+x_len/2, y-y_len/2, z,1],[x+x_len/2, y+y_len/2, z,1]]) #Verteces of the mirror
         self.vector1 = self.rotated_points[0] - np.array([x,y,z,0]) #Two vectors used for finding the normal
         self.vector2 = self.rotated_points[1] - np.array([x,y,z,0])
         self.reflectivity = reflectivity
     
     @property
-    def rotated_points(self):
-        T1 = self.find_T(-self.x, -self.y, -self.z)
-        T2 = self.find_T(self.x, self.y, self.z)
+    def rotated_points(self): #Returns the list of rotated points
+        T1 = self.T(-self.x, -self.y, -self.z)
+        T2 = self.T(self.x, self.y, self.z)
         R = np.dot(self.Rz,np.dot(self.Rx, self.Ry))
-        M = np.dot(T2, np.dot(R, T1))
-        rotated_points = [np.dot(M, point) for point in self.points]
+        M = np.dot(T2, np.dot(R, T1)) #Translates the point to the origin, rotates it, translates it back
+        rotated_points = [np.dot(M, point) for point in self.points] 
         return rotated_points
+    
     @property
     def verteces(self): #Returns a list of final vertices
         return self.rotated_points 
+
     @property
     def normal_vector(self): #Returns the normalised normal vector
         normal = np.cross(self.vector1, self.vector2)
         return normal/np.linalg.norm(normal)
+
     @property
     def plot_values(self): #Returns the values needed to plot the mirror as a square
         x_vals = [point[0] for point in self.rotated_points]
         y_vals = [point[1] for point in self.rotated_points]
         z_vals = [point[2] for point in self.rotated_points]
         return x_vals, y_vals, z_vals
-    def find_T(self, x, y, z):
+
+    @property
+    def Rx(self):
+        return np.array([[1,0,0,0],  
+                [0, np.cos(self.theta_x), -np.sin(self.theta_x), 0],
+                [0, np.sin(self.theta_x), np.sin(self.theta_x), 0],
+                [0,0,0,1]])
+
+    @property
+    def Ry(self):
+        return np.array([[np.cos(self.theta_y), 0, np.sin(self.theta_y), 0],
+                [0, 1, 0, 0],
+                [-np.sin(self.theta_y), 0, np.cos(self.theta_y), 0],
+                [0,0,0,1]])
+
+    @property
+    def Rz(self):
+        return np.array([[np.cos(self.theta_z), -np.sin(self.theta_z), 0, 0],
+                [np.sin(self.theta_z), np.cos(self.theta_z), 0, 0],
+                [0,0,1,0],
+                [0,0,0,1]])
+
+    def T(self, x, y, z):
         return np.array([[1,0,0,x],[0,1,0,y],[0,0,1,z], [0,0,0,1]])
+
     def __str__(self):
         return(f"Mirror at position ({self.x}, {self.y}, {self.z}), dimension {self.x_len, self.y_len}, rotation about x axis of {self.theta_x} radians, and rotation about y of {self.theta_y} radians")
 
@@ -114,7 +127,7 @@ square_eq = 'np.abs(x) > 45 or np.abs(y) > 45'
 #Test mirrors
 mirror1 = Mirror(0,0,20,10,10,0,0,0,0.2)
 mirror2 = Mirror(0,0,20,10,10,45,0,0,0.3)
-# ax.plot_trisurf(mirror1.plot_values[0], mirror1.plot_values[1], mirror1.plot_values[2], color = 'blue', alpha = mirror1.reflectivity)
+ax.plot_trisurf(mirror1.plot_values[0], mirror1.plot_values[1], mirror1.plot_values[2], color = 'blue', alpha = mirror1.reflectivity)
 # ax.plot_trisurf(mirror2.plot_values[0], mirror2.plot_values[1], mirror2.plot_values[2], color = 'blue', alpha = mirror2.reflectivity)
 
 #Creating the grid and list of mirrors
@@ -124,8 +137,9 @@ mirrors = grid.create_mirrors(0, 10, 10, 0, 0, 0, 0.5)
 
 for mirror in mirrors:
     #Plotting each mirror on the same axis
-    print(mirror)
-    ax.plot_trisurf(mirror.plot_values[0], mirror.plot_values[1], mirror.plot_values[2], color = 'blue', alpha = mirror.reflectivity)
+    # ax.plot_trisurf(mirror.plot_values[0], mirror.plot_values[1], mirror.plot_values[2], color = 'blue', alpha = mirror.reflectivity)
+    pass
 
 plt.show()
+
 print(grid)
