@@ -11,9 +11,6 @@ ax.set_xlabel('x')
 ax.set_ylabel('y')
 ax.set_zlabel('z')
 
-x_basis = np.array([1,0,0,0])
-y_basis = np.array([0,1,0,0])
-z_basis = np.array([0,0,1,0])
 
 class Grid():
     def __init__(self, eq, size_x, size_y, margin_x, margin_y):
@@ -25,6 +22,12 @@ class Grid():
         self.mirrors_used = 0
 
     def create_grid_space(self, x_len, y_len): #Returns a grid of possible locations for the mirror centers
+        """
+        Creates a grid of possible x and y coordinates by generating arrays of them given the size of the grid, and the margin around each mirror.
+        These coordinates are then made into a grid of possible points for the mirror centres.
+        The coordinates are then filtered by a boolean equation to clarify the arrangement of the mirror
+        Returns a zipped object of all the allowed coordinates
+        """
         x_coords = np.arange(-self.size_x, self.size_x+1, x_len+2*self.margin_x)
         y_coords = np.arange(-self.size_y, self.size_y+1, y_len+2*self.margin_y)
         grid = np.meshgrid(x_coords, y_coords)
@@ -39,19 +42,27 @@ class Grid():
         return zip(x_coords,y_coords)
 
     def create_mirrors(self, z, x_len, y_len, theta_x, theta_y, theta_z, reflectivity): #Returns a list of mirrors
+        """
+        Creates a mirror object for every space in the grid
+        Returns a list of the objects
+        """
         mirrors = []
         grid = self.create_grid_space(x_len, y_len)
         for (x,y) in grid:
             mirrors.append(Mirror(x, y, z, x_len, y_len, theta_x, theta_y, theta_z, reflectivity)) #Creates a mirror object for every allowed position within the grid
         return mirrors
 
-    def __str__(self):
+    def __str__(self): #Dictates how print(mirror) works
         return f"A grid of mirror locations limited by equation '{self.eq}', size {self.size_x, self.size_y} and {self.mirrors_used} mirrors used."
 
 class Mirror():
     def __init__(self, x, y, z, x_len, y_len, theta_x, theta_y, theta_z, reflectivity):
-        #x, y, z define the position of the mirror
-    
+        """
+        x,y,z dictate the position of the mirror
+        x_len, y_len dictate the dimensions of the mirror
+        theta_x, theta_y, theta_z dictate the rotation of the mirror
+        relectivity dictates how reflective the mirror is (currently the alpha value)
+        """
         self.x = x
         self.y = y
         self.z = z
@@ -73,14 +84,13 @@ class Mirror():
         return vector1, vector2
 
     @property
-    def pos(self):
+    def pos(self): #position of the centre of the mirror
         return np.array([self.x, self.y, self.z, 1])
     
     @property
     def rotated_points(self): #Returns the list of rotated points
         T1 = self.T(-self.x, -self.y, -self.z)
         T2 = self.T(self.x, self.y, self.z)
-        # R = np.dot(self.Rz,np.dot(self.Rx, self.Ry))
         M = np.dot(T2, np.dot(self.R, T1)) #Translates the point to the origin, rotates it, translates it back
         rotated_points = [np.dot(M, point) for point in self.points] 
         return rotated_points
@@ -95,13 +105,16 @@ class Mirror():
         return normal/np.linalg.norm(normal)
 
     @property
-    def plot_values(self): #Returns the values needed to plot the mirror as a square
+    def plot_values(self): #Returns the values needed to plot the mirror as a square using trisurface
         x_vals = [point[0] for point in self.rotated_points]
         y_vals = [point[1] for point in self.rotated_points]
         z_vals = [point[2] for point in self.rotated_points]
         return np.array([x_vals, y_vals, z_vals])
 
     def axis_rotation(self, axis, ang):
+        """
+        
+        """
         axis = axis/np.linalg.norm(axis)
         x = axis[0]
         y = axis[1]
@@ -176,7 +189,7 @@ mirrors = grid.create_mirrors(0, 10, 10, 0, 0, 0, 0.5)
 for mirror in mirrors:
     #Plotting each mirror on the same axis
     mirror.R = np.dot(mirror.Rz,np.dot(mirror.Rx, mirror.Ry))
-    mirror.point_to_tower([0,0,-70,0])
+    mirror.point_to_tower([0,0,70,0])
     try:
         ax.plot_trisurf(mirror.plot_values[0], mirror.plot_values[1], mirror.plot_values[2], color = 'blue', alpha = mirror.reflectivity)
         # ax.quiver(mirror.pos[0], mirror.pos[1], mirror.pos[2], mirror.normal_vector[0], mirror.normal_vector[1], mirror.normal_vector[2], color = 'r', arrow_length_ratio = 0.1)   
@@ -188,5 +201,5 @@ for mirror in mirrors:
 #Tower vector
 # ax.quiver(mirror1.pos[0], mirror1.pos[1], mirror1.pos[2], -10, -5, 20, color = 'r', arrow_length_ratio = 0.1)
 
-ax.scatter(0,0,-70, color = 'g', s=50)
+ax.scatter(0,0,70, color = 'g', s=50)
 plt.show()
