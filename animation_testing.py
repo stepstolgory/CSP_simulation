@@ -1,19 +1,20 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-plt.rcParams["figure.figsize"] = [7.00, 3.50]
-plt.rcParams["figure.autolayout"] = True
+xs = [i for i in range(-10,10,1)]
+ys = [i for i in range(-10,10,1)]
+resolution = 100
+points1 = []
+points2 =[]
+for x in xs:
+    for y in ys:
+        if 6*x**2+6*y**2-150 == 0:
+            points1.append((x,y))
+for x in xs:
+    for y in ys:
+        if 12*x*y-9*y**2 == 0:
+            points2.append((x,y))
 
-x = np.linspace(-10, 10, 100)
-y = np.linspace(-10, 10, 100)
+stationary_points = [e for e in points1 if e in points2]
+print(stationary_points)
 
-x, y = np.meshgrid(x, y)
-eq = 0.12 * x + 0.01 * y + 1.09
-
-fig = plt.figure()
-
-ax = fig.add_subplot(projection='3d')
-
-ax.plot_surface(x, y, eq)
-
-plt.show()

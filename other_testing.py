@@ -1,31 +1,56 @@
 import numpy as np
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
 
-# Define the function you want to plot in terms of x and y
-def my_function(x, y):
-    return 2*(x**3)+6*x*(y**2)-3*y**3-150*x
+class Ray:
+    def __init__(self, origin, direction):
+        self.origin = origin  # Starting point of the ray (x, y)
+        self.direction = direction / np.linalg.norm(direction)  # Unit vector representing ray's direction
 
-# Create a grid of x and y values
-x = np.linspace(-5, 5, 100)  # Define the range of x values
-y = np.linspace(-5, 5, 100)  # Define the range of y values
-X, Y = np.meshgrid(x, y)    # Create a grid of (x, y) pairs
+class Mirror:
+    def __init__(self, position, normal):
+        self.position = position  # Mirror's position (x, y)
+        self.normal = normal / np.linalg.norm(normal)  # Unit vector representing the mirror's normal
 
-# Calculate the corresponding z values using your function
-Z = my_function(X, Y)
-print(my_function(-3,-4))
-# Create a 3D plot
-fig = plt.figure()
-ax = fig.add_subplot(111, projection='3d')
+def reflect(ray, mirror):
+    # Calculate the incident angle between the ray and mirror normal
+    incident_angle = np.arccos(np.dot(ray.direction, mirror.normal))
+    
+    # Calculate the reflection angle
+    reflection_angle = np.pi - incident_angle
+    
+    # Calculate the reflected ray's direction using the reflection angle
+    reflected_direction = ray.direction - 2 * np.dot(ray.direction, mirror.normal) * mirror.normal
+    
+    # Create and return a new reflected ray
+    reflected_ray = Ray(ray.origin, reflected_direction)
+    
+    return reflected_ray
 
-# Plot the surface
-ax.plot_surface(X, Y, Z, cmap='viridis')
+# Define the starting point and direction of the incident ray
+incident_origin = np.array([0, 0])
+incident_direction = np.array([1, 1])
 
-# Add labels and a colorbar
-ax.set_xlabel('X')
-ax.set_ylabel('Y')
-ax.set_zlabel('Z')
-plt.colorbar(ax.plot_surface(X, Y, Z, cmap='viridis'), ax=ax, pad=0.1)
-print((20**1/3)**2+40/(20**1/3))
-# Show the plot
-plt.show()
+# Create an incident ray
+incident_ray = Ray(incident_origin, incident_direction)
+
+# Define the mirror's position and normal vector
+mirror_position = np.array([1, 0])
+mirror_normal = np.array([-1, 0])
+
+# Create a mirror
+mirror = Mirror(mirror_position, mirror_normal)
+
+# Simulate ray reflection
+reflected_ray = reflect(incident_ray, mirror)
+
+# Print the results
+print("Incident Ray:")
+print("Origin:", incident_ray.origin)
+print("Direction:", incident_ray.direction)
+
+print("\nMirror:")
+print("Position:", mirror.position)
+print("Normal:", mirror.normal)
+
+print("\nReflected Ray:")
+print("Origin:", reflected_ray.origin)
+print("Direction:", reflected_ray.direction)

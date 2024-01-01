@@ -2,7 +2,7 @@
 import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib.animation import FuncAnimation, PillowWriter
-from random import random
+
 #Set up for the plot 
 fig = plt.figure(num=1, clear=True)
 ax = fig.add_subplot(1, 1, 1, projection='3d')
@@ -11,89 +11,10 @@ ax.set_ylim(-100, 100)
 ax.set_zlim(-100, 100)
 ax.set_xlabel('x')
 ax.set_ylabel('y')
-ax.set_zlabel('z')
-class Sun():
-    #Takes a slightly eliptical shaped path across the sky
-    #Calculate position in 15 minute intervals
-    #Position in 2 dimensions
-    #Assume longest day of summer for the rise and set times
-    #x = 50cost, y = sint
-    x = 100
-    y = 0
-    z = 0
-    position = np.array([x, z], dtype=float)
-
-    def __init__(self, rise_time, set_time, intensity):
-        self.rise_time = rise_time
-        self.set_time = set_time
-        self.intensity = intensity
-
-    def move(self,t):
-        #Takes a time t, to determine the position of the sun and change it
-        self.x, self.z = 100*np.cos((np.pi*t/(self.day_time))), 70*np.sin(np.pi*t/(self.day_time))
-        return self.x, self.z
-
-    @property
-    def day_time(self):
-        return self.set_time-self.rise_time
-    
-    def create_ray(self):
-        pass
-
-    def __str__(self):
-        return (f"Sun({self.rise_time}, {self.set_time}, {self.intensity}, {self.x, self.y})")
-    
-class Ray(Sun):
-    #Find vector towards given mirror, that is the ray
-    #Inherits the position of the sun
-    def __init__(self):
-        pass 
-
-class Grid():
-    def __init__(self, eq, size_x, size_y, margin_x, margin_y):
-        self.eq = eq
-        self.size_x = size_x
-        self.size_y = size_y
-        self.margin_x = margin_x
-        self.margin_y = margin_y
-        self.mirrors_used = 0
-
-    def create_grid_space(self, x_len, y_len): #Returns a grid of possible locations for the mirror centers
-        """
-        Creates a grid of possible x and y coordinates by generating arrays of them given the size of the grid, and the margin around each mirror.
-        These coordinates are then made into a grid of possible points for the mirror centres.
-        The coordinates are then filtered by a boolean equation to clarify the arrangement of the mirror
-        Returns a zipped object of all the allowed coordinates
-        """
-        x_coords = np.arange(-self.size_x, self.size_x+1, x_len+2*self.margin_x)
-        y_coords = np.arange(-self.size_y, self.size_y+1, y_len+2*self.margin_y)
-        grid = np.meshgrid(x_coords, y_coords)
-        positions = zip(*(x.flat for x in grid)) #Returns the coordinate (x,y) value
-        x_coords = []
-        y_coords = []
-        for (x,y) in positions: 
-            if eval(self.eq): #If the coordinate satisfies a boolean equation i.e. it is in side a defined shape, the coordinate is kept
-                x_coords.append(x)
-                y_coords.append(y)
-        self.mirrors_used = len(list(zip(x_coords, y_coords))) #Calculates the number of mirrors used by taking the number of allowed coordinates
-        return zip(x_coords,y_coords)
-
-    def create_mirrors(self, z, x_len, y_len, theta_x, theta_y, theta_z, reflectivity): #Returns a list of mirrors
-        """
-        Creates a mirror object for every space in the grid
-        Returns a list of the objects
-        """
-        mirrors = []
-        grid = self.create_grid_space(x_len, y_len)
-        for (x,y) in grid:
-            mirrors.append(Mirror(x, y, z, x_len, y_len, theta_x, theta_y, theta_z, reflectivity)) #Creates a mirror object for every allowed position within the grid
-        return mirrors
-
-    def __str__(self): #Dictates how print(mirror) works
-        return f"A grid of mirror locations limited by equation '{self.eq}', size {self.size_x, self.size_y} and {self.mirrors_used} mirrors used."
+ax.set_zlabel('z') 
 
 class Mirror():
-    def __init__(self, x, y, z, x_len, y_len, theta_x, theta_y, theta_z, reflectivity):
+    def __init__(self, x, y, z, x_len, y_len, theta_x, theta_y, theta_z, reflectivity, id):
         """
         x,y,z dictate the position of the mirror
         x_len, y_len dictate the dimensions of the mirror
@@ -113,11 +34,15 @@ class Mirror():
 
         self.points = np.array([[x,y,z,1],[x-x_len/2,y-y_len/2,z,1],[x-x_len/2, y+y_len/2, z,1],[x+x_len/2, y-y_len/2, z,1],[x+x_len/2, y+y_len/2, z,1]]) #Verteces of the mirror
         self.reflectivity = reflectivity
+
+        self.id = id
     
     @property
     def vectors(self):
         vector1 = self.rotated_points[1]-self.pos  #Two vectors used for finding the normal
+        vector1 = vector1/np.linalg.norm(vector1)
         vector2 = self.rotated_points[2]-self.pos
+        vector2 = vector2/np.linalg.norm(vector2)
         return vector1, vector2
 
     @property
@@ -179,6 +104,7 @@ class Mirror():
                 [np.sin(self.theta_z), np.cos(self.theta_z), 0, 0],
                 [0,0,1,0],
                 [0,0,0,1]])
+   
     @property
     def R(self):
         return self._R
@@ -192,6 +118,10 @@ class Mirror():
     
     #FIXME: Does something weird at negative z values (might not be an issue)
     def point_to_tower(self, tower):
+        """
+        Makes the mirrors face a point.
+        Will need to be changed to redirect light towards the tower instead.
+        """
         tower = tower - np.array([self.x, self.y, self.z, 0])
         norm_tower = np.delete(tower/np.linalg.norm(tower), 3)
         axis = np.cross(self.normal_vector, norm_tower)
@@ -203,33 +133,102 @@ class Mirror():
     def __str__(self):
         return(f"Mirror at position ({self.x}, {self.y}, {self.z}), dimension {self.x_len, self.y_len}, rotation about x axis of {self.theta_x} radians, and rotation about y of {self.theta_y} radians")
 
+class Grid():
+    def __init__(self, eq, size_x, size_y, margin_x, margin_y):
+        self.eq = eq
+        self.size_x = size_x
+        self.size_y = size_y
+        self.margin_x = margin_x
+        self.margin_y = margin_y
+        self.mirrors_used = 0
 
-sun = Sun(360, 1220, 10)
+    def create_grid_space(self, x_len, y_len): #Returns a grid of possible locations for the mirror centers
+        """
+        Creates a grid of possible x and y coordinates by generating arrays of them given the size of the grid, and the margin around each mirror.
+        These coordinates are then made into a grid of possible points for the mirror centres.
+        The coordinates are then filtered by a boolean equation to clarify the arrangement of the mirror
+        Returns a zipped object of all the allowed coordinates
+        """
+        x_coords = np.arange(-self.size_x, self.size_x+1, x_len+2*self.margin_x)
+        y_coords = np.arange(-self.size_y, self.size_y+1, y_len+2*self.margin_y)
+        grid = np.meshgrid(x_coords, y_coords)
+        positions = zip(*(x.flat for x in grid)) #Returns the coordinate (x,y) value
+        x_coords = []
+        y_coords = []
+        for (x,y) in positions: 
+            if eval(self.eq): #If the coordinate satisfies a boolean equation i.e. it is in side a defined shape, the coordinate is kept
+                x_coords.append(x)
+                y_coords.append(y)
+        self.mirrors_used = len(list(zip(x_coords, y_coords))) #Calculates the number of mirrors used by taking the number of allowed coordinates
+        return zip(x_coords,y_coords)
 
-fig2, ax2 = plt.subplots(1,1)
-fig2.set_size_inches(5,5)
+    def create_mirrors(self, z, x_len, y_len, theta_x, theta_y, theta_z, reflectivity): #Returns a list of mirrors
+        """
+        Creates a mirror object for every space in the grid
+        Returns a list of the objects
+        """
+        mirrors = []
+        grid = self.create_grid_space(x_len, y_len)
+        i=0
+        for (x,y) in grid:
+            i+=1
+            mirrors.append(Mirror(x, y, z, x_len, y_len, theta_x, theta_y, theta_z, reflectivity, i)) #Creates a mirror object for every allowed position within the grid
+        return mirrors
 
-#Equations for the grid shape
-all_mirrors = 'True'
-no_mirrors = 'False'
-circle_eq = '52.5**2 >= x**2+y**2 >= 20**2'
-square_eq = 'np.abs(x) > 45 or np.abs(y) > 45'
+    def __str__(self): #Dictates how print(mirror) works
+        return f"A grid of mirror locations limited by equation '{self.eq}', size {self.size_x, self.size_y} and {self.mirrors_used} mirrors used."
 
-grid = Grid(all_mirrors, 50, 50, 1.25, 1.25)
-mirrors = grid.create_mirrors(0, 10, 10, 0, 0, 0, 0.5)
+class Sun(Mirror):
+    """
+    Takes a slightly eliptical shaped path across the sky
+    Calculate position in 15 minute intervals
+    Position in 2 dimensions
+    Assume longest day of summer for the rise and set times
+    """
+    rays = []
 
-for mirror in mirrors:
-    #Plotting each mirror on the same axis
-    mirror.R = np.dot(mirror.Rz,np.dot(mirror.Rx, mirror.Ry))
-    mirror.point_to_tower([0,0,70,0])
-    try:
-        ax.plot_trisurf(mirror.plot_values[0], mirror.plot_values[1], mirror.plot_values[2], color = 'blue', alpha = mirror.reflectivity)
-        # ax.quiver(mirror.pos[0], mirror.pos[1], mirror.pos[2], mirror.normal_vector[0], mirror.normal_vector[1], mirror.normal_vector[2], color = 'r', arrow_length_ratio = 0.1)   
-    except RuntimeError:
-        print(f"Run time error for {mirror}")
+    def __init__(self, rise_time, set_time, intensity, x, y, z, x_len, y_len, theta_x, theta_y, theta_z, reflectivity, id):
+        super().__init__(x, y, z, x_len, y_len, theta_x, theta_y, theta_z, reflectivity, id)
+        self.rise_time = rise_time
+        self.set_time = set_time
+        self.intensity = intensity
+        self.grid_space = Grid('True', 100, 100, 2.5, 2.5).create_grid_space(0,0)
 
-ax.scatter(0,0,70, color = 'g', s=50)
-plt.show()
+    def move(self,t):
+        #Takes a time t, to determine the position of the sun and change it
+        self.x, self.z = 100*np.cos((np.pi*t/(self.day_time))), 70*np.sin(np.pi*t/(self.day_time))+1
+        return self.x, self.z
+
+    @property
+    def day_time(self):
+        return self.set_time-self.rise_time
+    
+    @property
+    def ray_coordinates(self):
+        ray_coordinates = []
+        for (x,y) in self.grid_space:
+            coord = self.pos + x*self.vectors[0]+y*self.vectors[1]
+            ray_coordinates.append(coord)
+        print(f"There are {len(ray_coordinates)} rays.")
+        return ray_coordinates
+
+    def create_rays(self):
+        j = 0
+        for coordinate in self.ray_coordinates:
+            j+=1
+            self.rays.append(Ray(coordinate, self.normal_vector, 100, j))
+        return self.rays
+
+    def __str__(self):
+        return (f"Sun({self.rise_time}, {self.set_time}, {self.intensity}, {self.x, self.y})")
+    
+
+class Ray():
+    def __init__(self, origin, direction, magnitude, id):
+        self.origin = origin
+        self.direction = direction
+        self.magnitude = magnitude
+        self.id = id
 
 def animate(i):
     # Get the point from the points list at index i
@@ -238,8 +237,12 @@ def animate(i):
     ax.set_xlim(-100, 100)
     ax.set_ylim(-100, 100)
     ax.set_zlim(-100, 100)
-    ax.plot(x[i], 0, z[i], color='orange', 
-            label='original', marker='o')
+    sun = Mirror(x[i], 0, z[i], 150, 150, 0, 0, 0, 1, 0)
+    sun.R = np.dot(sun.Rz,np.dot(sun.Rx, sun.Ry))
+
+    sun.point_to_tower([0,0,0,0])
+    ax.plot_trisurf(sun.plot_values[0], sun.plot_values[1], sun.plot_values[2], color="orange", alpha = sun.reflectivity)
+
     for mirror in mirrors:
         #Plotting each mirror on the same axis
         mirror.R = np.dot(mirror.Rz,np.dot(mirror.Rx, mirror.Ry))
@@ -250,19 +253,38 @@ def animate(i):
         except RuntimeError:
             print(f"Run time error for {mirror}")
 
-def create_animation(path):
-    for t in range(0, sun.day_time+1, 15):
-        x_pos, z_pos = sun.move(t)
-        x.append(x_pos)
-        z.append(z_pos)
-    ani = FuncAnimation(fig, animate, frames=len(x),
-                        interval=500, repeat=False)
-    ani.save(path, dpi = 300, writer=PillowWriter(fps=5))
-    plt.close()
 
-x = []
-z = []
+if __name__ == "__main__":
+    #Arrays for animation
+    x = []
+    z = []  
+    #Equations for the grid shape
+    all_mirrors = 'True'
+    no_mirrors = 'False'
+    circle_eq = '52.5**2 >= x**2+y**2 >= 20**2'
+    square_eq = 'np.abs(x) > 45 or np.abs(y) > 45'
 
-# create_animation("simple_animation.gif")
+    sun = Sun(360, 1220, 10, 100, 0, 1, 150, 150, 0, 0, 0, 1, 0)
+    sun.R = np.dot(sun.Rz,np.dot(sun.Rx, sun.Ry))
+    sun.point_to_tower([0,0,0,0])
+    grid = Grid(circle_eq, 50, 50, 1.25, 1.25)
+    mirrors = grid.create_mirrors(0, 10, 10, 0, 0, 0, 0.5)
 
+    for mirror in mirrors:
+        #Plotting each mirror on the same axis
+        mirror.R = np.dot(mirror.Rz,np.dot(mirror.Rx, mirror.Ry))
+        mirror.point_to_tower([0,0,70,0])
+        try:
+            ax.plot_trisurf(mirror.plot_values[0], mirror.plot_values[1], mirror.plot_values[2], color = 'blue', alpha = mirror.reflectivity)
+            # ax.quiver(mirror.pos[0], mirror.pos[1], mirror.pos[2], mirror.normal_vector[0], mirror.normal_vector[1], mirror.normal_vector[2], color = 'r', arrow_length_ratio = 0.1)   
+        except RuntimeError:
+            print(f"Run time error for {mirror}")
+
+    for ray in sun.create_rays():
+        ax.scatter(ray.origin[0], ray.origin[1], ray.origin[2], color = 'b', s=1)
+    ax.scatter(0,0,70, color = 'g', s=50)
+    plt.show()
+    print(grid)
+    
+    # create_animation("simple_animation.gif")
 
