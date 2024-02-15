@@ -1,4 +1,3 @@
-#Playing around with classes and light physics
 import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib.animation import FuncAnimation, PillowWriter
@@ -57,10 +56,6 @@ class Mirror():
         rotated_points = [np.dot(M, point) for point in self.points] 
         return rotated_points
     
-    @property
-    def verteces(self): #Returns a list of final vertices
-        return self.rotated_points
-
     @property
     def normal_vector(self): #Returns the normalised normal vector
         normal = np.cross(np.delete(self.vectors[1],3), np.delete(self.vectors[0],3))
@@ -131,7 +126,7 @@ class Mirror():
         
 
     def __str__(self):
-        return(f"Mirror at position ({self.x}, {self.y}, {self.z}), dimension {self.x_len, self.y_len}, rotation about x axis of {self.theta_x} radians, and rotation about y of {self.theta_y} radians")
+        return(f"Mirror {self.id} at position ({self.x}, {self.y}, {self.z}), dimension {self.x_len, self.y_len}, rotation about x axis of {self.theta_x} radians, and rotation about y of {self.theta_y} radians")
 
 class Grid():
     def __init__(self, eq, size_x, size_y, margin_x, margin_y):
@@ -178,6 +173,38 @@ class Grid():
     def __str__(self): #Dictates how print(mirror) works
         return f"A grid of mirror locations limited by equation '{self.eq}', size {self.size_x, self.size_y} and {self.mirrors_used} mirrors used."
 
+class Tower():
+    def __init__(self, height, g_height):
+        self.height = height
+        self.g_height = g_height
+        self.grid_space = Grid('True', 75/7, 75/7, 0, 0).create_grid_space(0.01,0.01)
+    
+    rays = []
+        
+    @property
+    def ray_coordinates(self):
+        ray_coordinates = []
+        for (x,y) in self.grid_space:
+            coord = np.array([x,y,(self.height-self.g_height)])
+            ray_coordinates.append(coord)
+        return ray_coordinates
+
+    def create_rays(self): 
+        """
+        Creates a python list of instances of the ray class
+        The direction is between the tower and a point on the ray grid, and is normalised
+        The magnitude is that which is required to reach z = 0 with the given direction
+        """
+        j = 0
+        for coordinate in self.ray_coordinates:
+            j+=1
+            direction = coordinate - np.array([0,0,self.height])
+            direction = direction/np.linalg.norm(direction)
+            magnitude = np.sqrt(self.height**2+(49*(coordinate[0]**2+coordinate[1]**2)))
+            self.rays.append(Ray(np.array([0,0,self.height]), direction, magnitude, j))
+        print(f"{j} rays were created")
+        return self.rays
+
 class Sun(Mirror):
     """
     Takes a slightly eliptical shaped path across the sky
@@ -185,8 +212,6 @@ class Sun(Mirror):
     Position in 2 dimensions
     Assume longest day of summer for the rise and set times
     """
-    rays = []
-
     def __init__(self, rise_time, set_time, intensity, x, y, z, x_len, y_len, theta_x, theta_y, theta_z, reflectivity, id):
         super().__init__(x, y, z, x_len, y_len, theta_x, theta_y, theta_z, reflectivity, id)
         self.rise_time = rise_time
@@ -203,35 +228,96 @@ class Sun(Mirror):
     def day_time(self):
         return self.set_time-self.rise_time
     
-    @property
-    def ray_coordinates(self):
-        ray_coordinates = []
-        for (x,y) in self.grid_space:
-            coord = self.pos + x*self.vectors[0]+y*self.vectors[1]
-            ray_coordinates.append(coord)
-        print(f"There are {len(ray_coordinates)} rays.")
-        return ray_coordinates
-
-    def create_rays(self):
-        j = 0
-        for coordinate in self.ray_coordinates:
-            j+=1
-            self.rays.append(Ray(coordinate, self.normal_vector, 100, j))
-        return self.rays
 
     def __str__(self):
         return (f"Sun({self.rise_time}, {self.set_time}, {self.intensity}, {self.x, self.y})")
-    
 
 class Ray():
+    """
+    The controls for how many rays to create is located in the initialisation of the Tower class
+    The lower the two values in "create grid" the more rays are created. However, they cannot equal to 0
+    """
     def __init__(self, origin, direction, magnitude, id):
         self.origin = origin
         self.direction = direction
         self.magnitude = magnitude
+        self.mirror_hit = None
         self.id = id
 
+    @property
+    
+    def intersection_point(self):
+        """
+        Returns the point of intersection with the flat plane at z = 0
+        Used to locate the closest mirror centre to the ray
+        """
+        point = np.array([self.origin[0]-((self.origin[2]*self.direction[0])/self.direction[2]),self.origin[1]-((self.origin[2]*self.direction[1])/self.direction[2]), 0])
+        return point
+    
+    
+    def rotated_intersection(self, mirror):
+        """
+        If the ray is not parallel to the rotated plane of the closest mirror, then returns the intercept of that ray with the plane. 
+        Used to check whether the ray hits the mirror
+        """
+        if np.dot(self.direction, mirror.normal_vector) != 0:
+            d = np.dot(np.array([mirror.x, mirror.y, mirror.z])-self.origin, mirror.normal_vector)/(np.dot(self.direction, mirror.normal_vector))
+            point = self.origin + d*self.direction
+            return point
+
+    def closest_mirror(self, possible_mirrors):
+        """
+        Finds the closest mirror to the point of interception with the z=0 plane
+        """
+        closest_mirror = None
+        min_distance = float('inf')
+        int_pnt = self.intersection_point
+        for mirror in possible_mirrors:
+            distance = np.linalg.norm(int_pnt - np.array([mirror.x, mirror.y, mirror.z]))
+            if distance <= min_distance:
+                min_distance = distance
+                closest_mirror = mirror
+        return closest_mirror
+
+    
+    def is_point_in_mirror(self, mirror, intersection):
+        """
+        Determines whether the intersection of the ray with the infinite plane of the mirror is within the finite size
+        Returns false if it is parallel , or if it is outside of the mirror
+        Otherwise returns True
+        A, B are the vectors for two perpendicular sides of the mirror
+        p is the point in question
+        """
+        A = np.delete(mirror.rotated_points[2],3)-np.delete(mirror.rotated_points[1],3)
+        B = np.delete(mirror.rotated_points[3],3)-np.delete(mirror.rotated_points[1],3)
+        p = self.rotated_intersection(mirror) - np.delete(mirror.rotated_points[0],3)
+
+        if not np.isclose(np.dot(mirror.normal_vector, p), 0):
+            return False
+
+        matrix = np.column_stack((A, B))
+        u,v= np.linalg.lstsq(matrix, p, rcond=None)[0]
+        inside = 0<=u<=1 and 0<=v<=1
+        return inside
+
+    def is_mirror_hit(self, mirrors):
+        """
+        Returns True if a mirror is hit
+        Sets an attribute of the ray object to the mirror object that was hit
+        This is to be used in reflection, and tracking the rays
+        Returns False if the ray misses all of the mirrors
+        """
+        closest_mirror = self.closest_mirror(mirrors)
+        if self.is_point_in_mirror(closest_mirror, self.rotated_intersection(closest_mirror)):
+            self.mirror_hit = closest_mirror
+            return True
+        return False
+
+    def __str__(self):
+        return f"Ray number {self.id} with the starting point {self.origin}, direction {self.direction} and magnitude {self.magnitude}"
+
 def animate(i):
-    # Get the point from the points list at index i
+    # Get the point from the points list at indemirrors i
     # Plot that point using the x and y coordinates
     ax.clear()
     ax.set_xlim(-100, 100)
@@ -254,10 +340,22 @@ def animate(i):
             print(f"Run time error for {mirror}")
 
 
-if __name__ == "__main__":
-    #Arrays for animation
+ #Arrays for animation
     x = []
-    z = []  
+    z = []
+
+def create_animation(path):
+        for t in range(0, sun.day_time+1, 15):
+            x_pos, z_pos = sun.move(t)
+            x.append(x_pos)
+            z.append(z_pos)
+        ani = FuncAnimation(fig, animate, frames=len(x),
+                            interval=500, repeat=False)
+        ani.save(path, dpi = 300, writer=PillowWriter(fps=5))
+        plt.close()
+
+if __name__ == "__main__":
+     
     #Equations for the grid shape
     all_mirrors = 'True'
     no_mirrors = 'False'
@@ -266,25 +364,48 @@ if __name__ == "__main__":
 
     sun = Sun(360, 1220, 10, 100, 0, 1, 150, 150, 0, 0, 0, 1, 0)
     sun.R = np.dot(sun.Rz,np.dot(sun.Rx, sun.Ry))
+    tower = Tower(70, 10)
     sun.point_to_tower([0,0,0,0])
-    grid = Grid(circle_eq, 50, 50, 1.25, 1.25)
+    grid = Grid(circle_eq, 75, 75, 2.5, 2.5)
     mirrors = grid.create_mirrors(0, 10, 10, 0, 0, 0, 0.5)
-
     for mirror in mirrors:
         #Plotting each mirror on the same axis
-        mirror.R = np.dot(mirror.Rz,np.dot(mirror.Rx, mirror.Ry))
-        mirror.point_to_tower([0,0,70,0])
-        try:
-            ax.plot_trisurf(mirror.plot_values[0], mirror.plot_values[1], mirror.plot_values[2], color = 'blue', alpha = mirror.reflectivity)
-            # ax.quiver(mirror.pos[0], mirror.pos[1], mirror.pos[2], mirror.normal_vector[0], mirror.normal_vector[1], mirror.normal_vector[2], color = 'r', arrow_length_ratio = 0.1)   
-        except RuntimeError:
-            print(f"Run time error for {mirror}")
+            mirror.R = np.dot(mirror.Rz,np.dot(mirror.Rx, mirror.Ry))
+            """
+            Uncomment the following line to point all of the mirrors to any point, leave the 4th value at 0
+            """
+            # mirror.point_to_tower([0,0,70,0])
+            try:
+                ax.plot_trisurf(mirror.plot_values[0], mirror.plot_values[1], mirror.plot_values[2], color = 'blue', alpha = mirror.reflectivity)  
+            except RuntimeError:
+                """
+                The mirror straight under the tower vector wants to be rotated 180 degrees
+                But that gives a RuntimeError
+                As this mirror is technically inside of the tower, the mirror is removed.
+                """
+                mirrors = np.delete(mirrors, mirror.id - 1)
+                print(f"Run time error for {mirror}")
+    rays = tower.create_rays()
+    useable_rays = np.array([])
+    counter = 0
+    for ray in rays:
+        if ray.is_mirror_hit(mirrors):
+            """
+            In order of commented lines:
+            1. Print out which ray hit which mirror, useful for debugging
+            2. Plot each of the rays that hits a mirror (really slow and cluttered for anything below (1,1) in the setting)
+            3. Creates a new arrays only with the rays that hit mirrors
+            """
+            # print(f"Ray {ray.id} hit mirror {ray.mirror_hit}")
+            #ax.quiver(ray.origin[0], ray.origin[1], ray.origin[2], ray.direction[0], ray.direction[1], ray.direction[2], color = 'b', length = 1.5*ray.magnitude)
+            #useable_rays = np.append(useable_rays, [ray])
+            counter +=1    
+            
+            
 
-    for ray in sun.create_rays():
-        ax.scatter(ray.origin[0], ray.origin[1], ray.origin[2], color = 'b', s=1)
     ax.scatter(0,0,70, color = 'g', s=50)
+    print(f"{counter} rays were plotted")
+    print(f"{(counter/len(rays))*100}% of rays hit the mirrors")
     plt.show()
-    print(grid)
-    
-    # create_animation("simple_animation.gif")
-
+    #Line below creates and animation of the sun moving across, that is currently saved under simple_animation.gif
+    #create_animation("simple_animation.gif")
