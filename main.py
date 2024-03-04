@@ -41,7 +41,8 @@ class Mirror():
         self.theta_y = theta_y
         self.theta_z = theta_z
 
-        self.points = np.array([[x,y,z,1],[x-x_len/2,y-y_len/2,z,1],[x-x_len/2, y+y_len/2, z,1],[x+x_len/2, y-y_len/2, z,1],[x+x_len/2, y+y_len/2, z,1]]) #Verteces of the mirror
+        #Non rotated verteces of the mirror
+        self.points = np.array([[x,y,z,1],[x-x_len/2,y-y_len/2,z,1],[x-x_len/2, y+y_len/2, z,1],[x+x_len/2, y-y_len/2, z,1],[x+x_len/2, y+y_len/2, z,1]])
         self.reflectivity = reflectivity
 
         self.id = id
@@ -167,7 +168,7 @@ class Grid():
         self.margin_y = margin_y
         self.mirrors_used = 0
 
-    def create_grid_space(self, x_len, y_len): #Returns a grid of possible locations for the mirror centers
+    def create_grid_space(self, x_len, y_len):
         """
         Creates a grid of possible x and y coordinates by generating arrays of them given the size of the grid, and the margin around each mirror.
         These coordinates are then made into a grid of possible points for the mirror centres.
@@ -187,7 +188,7 @@ class Grid():
         self.mirrors_used = len(list(zip(x_coords, y_coords))) #Calculates the number of mirrors used by taking the number of allowed coordinates
         return zip(x_coords,y_coords)
 
-    def create_mirrors(self, z, x_len, y_len, theta_x, theta_y, theta_z, reflectivity): #Returns a list of mirrors
+    def create_mirrors(self, z, x_len, y_len, theta_x, theta_y, theta_z, reflectivity):
         """
         Creates a mirror object for every space in the grid
         Returns a list of the objects
@@ -197,10 +198,11 @@ class Grid():
         i=0
         for (x,y) in grid:
             i+=1
-            mirrors.append(Mirror(x, y, z, x_len, y_len, theta_x, theta_y, theta_z, reflectivity, i)) #Creates a mirror object for every allowed position within the grid
+            #Creates a mirror object for every allowed position within the grid
+            mirrors.append(Mirror(x, y, z, x_len, y_len, theta_x, theta_y, theta_z, reflectivity, i)) 
         return mirrors
 
-    def __str__(self): #Dictates how print(mirror) works
+    def __str__(self):
         return f"A grid of mirror locations limited by equation '{self.eq}', size {self.size_x, self.size_y} and {self.mirrors_used} mirrors used."
 
 class Tower():
@@ -254,7 +256,9 @@ class Sun(Mirror):
         self.grid_space = Grid('True', 100, 100, 2.5, 2.5).create_grid_space(0,0)
 
     def move(self,t):
-        #Takes a time t, to determine the position of the sun and change it
+        """
+        Takes a time t, to determine the position of the sun and change it
+        """
         self.x, self.z = 100*np.cos((np.pi*t/(self.day_time))), 70*np.sin(np.pi*t/(self.day_time))+1
         return self.x, self.z
 
@@ -365,8 +369,6 @@ class Ray():
 
 """These two functions are outdated, will update later"""
 def animate(i):
-    # Get the point from the points list at indemirrors i
-    # Plot that point using the x and y coordinates
     ax.clear()
     ax.set_xlim(-100, 100)
     ax.set_ylim(-100, 100)
@@ -383,13 +385,12 @@ def animate(i):
         mirror.R = np.dot(mirror.Rz,np.dot(mirror.Rx, mirror.Ry))
         mirror.ray_to_tower(tower, sun)
         try:
-            ax.plot_trisurf(mirror.plot_values[0], mirror.plot_values[1], mirror.plot_values[2], color = 'blue', alpha = mirror.reflectivity)
-            # ax.quiver(mirror.pos[0], mirror.pos[1], mirror.pos[2], mirror.normal_vector[0], mirror.normal_vector[1], mirror.normal_vector[2], color = 'r', arrow_length_ratio = 0.1)   
+            ax.plot_trisurf(mirror.plot_values[0], mirror.plot_values[1], mirror.plot_values[2], color = 'blue', alpha = mirror.reflectivity)   
         except RuntimeError:
             print(f"Run time error for {mirror}")
 
 
- #Arrays for animation
+
 
 def create_animation(path):
     for t in range(0, sun.day_time+1, 15):
@@ -430,7 +431,6 @@ if __name__ == "__main__":
 
     """Calculations and plotting"""
     for mirror in mirrors:
-        #Plotting each mirror on the same axis
             mirror.R = np.dot(mirror.Rz,np.dot(mirror.Rx, mirror.Ry))
             """
             Use the first line to point all of the mirrors to any point, leave the 4th value at 0
@@ -438,6 +438,7 @@ if __name__ == "__main__":
             """
             mirror.point_to_tower([tower.x, tower.y, tower.z, 0])
             #mirror.ray_to_tower(tower, sun)
+
             try:
                 ax.plot_trisurf(mirror.plot_values[0], mirror.plot_values[1], mirror.plot_values[2], color = 'r', alpha = mirror.reflectivity) 
             except RuntimeError:
@@ -456,10 +457,9 @@ if __name__ == "__main__":
                 """
                 In order of commented lines:
                 1. Print out which ray hit which mirror, useful for debugging
-                2. Plot each of the rays that hits a mirror (really slow and cluttered for anything below (1,1) in the setting)
+                2. Plot each of the rays that hits a mirror (really slow and cluttered for anything below (0.1,0.1) in the setting)
                 3. In tangent with the scatter in the else clause, displays the points at which the rays hit the plane of the mirrors
                    and whether it hit a mirror (green) or not (red)
-                4. Creates a new arrays only with the rays that hit mirrors
                 """
                 # print(f"Ray {ray.id} hit mirror {ray.mirror_hit}")
                 ax.quiver(ray.origin[0], ray.origin[1], ray.origin[2], ray.direction[0], ray.direction[1], ray.direction[2], color = 'b', length = ray.magnitude, arrow_length_ratio = 0.1)
@@ -484,6 +484,8 @@ if __name__ == "__main__":
     print(f"{len(useable_rays)} rays were plotted")
     print(f"{(len(useable_rays)/len(rays))*100}% of rays hit the mirrors")
     plt.show()
+    
+    """Animation creation toggle"""
     #Line below creates and animation of the sun moving across, that is currently saved under simple_animation.gif
     x = []
     z = []
