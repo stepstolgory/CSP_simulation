@@ -149,15 +149,21 @@ class Mirror():
         value = self.axis_rotation(axis, ang)
         self.R = value
 
-    """This is a test of what Sean wrote ages ago for pointing a ray to tower"""
+    """WIP - This is a test of what Sean wrote ages ago for pointing a ray to tower"""
     def ray_to_tower(self, tower, sun):
-        self.theta_z = np.arctan((tower.y+sun.y-2*self.y)/(tower.x+sun.x-2*self.x))
-        self.theta_y = np.arctan((np.sqrt((tower.x+sun.x-2*self.x)**2 + (tower.y+sun.y-2*self.y)**2))/(tower.z+sun.z-2*self.z))
+        theta = np.arctan((tower.y+sun.y-2*self.y)/(tower.x+sun.x-2*self.x))
+        phi = np.arctan(np.sqrt((tower.x+sun.x-2*self.x)**2+(tower.y+sun.y-2*self.y)**2)/(tower.z+sun.z-2*self.z))
         
-        self.R = np.dot(self.Ry, self.Rz)
+        y_axis = np.array([0,1,0])
+        z_axis = np.array([0,0,1])
+        
+        y_rotation = self.axis_rotation(y_axis, theta)
+        z_rotation = self.axis_rotation(z_axis, phi)
+
+        self.R = np.dot(y_rotation, z_rotation)
 
     def __str__(self):
-        return(f"Mirror {self.id} at position ({self.x}, {self.y}, {self.z}), dimension {self.x_len, self.y_len}, rotation about x axis of {self.theta_x} radians, and rotation about y of {self.theta_y} radians")
+        return(f"Mirror {self.id} at position ({self.x}, {self.y}, {self.z}), dimension {self.x_len, self.y_len}, rotation  of {self.theta_x, self.theta_y, self.theta_z} radians about x, y, z axis respectively.")
 
 class Grid():
     def __init__(self, eq, size_x, size_y, margin_x, margin_y):
@@ -212,7 +218,7 @@ class Tower():
         self.z = z
         self.g_height = g_height
         """Change the values in 'create_grid_space' to alter density of rays"""
-        self.grid_space = Grid('True', (75+x)/(z/g_height), (75+x)/(z/g_height), 0, 0).create_grid_space(1,1)
+        self.grid_space = Grid('True', np.sqrt(75**2+x**2)/(z/g_height), np.sqrt(75**2+x**2)/(z/g_height), 0, 0).create_grid_space(1,1)
     
     rays = []
         
@@ -391,7 +397,6 @@ def animate(i):
 
 
 
-
 def create_animation(path):
     for t in range(0, sun.day_time+1, 15):
         x_pos, z_pos = sun.move(t)
@@ -414,11 +419,13 @@ if __name__ == "__main__":
     sun = Sun(360, 1220, 10, 100, 0, 200, 150, 150, 0, 0, 0, 1, 0)
     sun.R = np.dot(sun.Rz,np.dot(sun.Rx, sun.Ry))
     sun.point_to_tower([0,0,0,0])
-    ax.plot_trisurf(sun.plot_values[0], sun.plot_values[1], sun.plot_values[2], color="orange", alpha = sun.reflectivity)
+    #ax.plot_trisurf(sun.plot_values[0], sun.plot_values[1], sun.plot_values[2], color="orange", alpha = sun.reflectivity)
 
     """Tower setup"""
     tower = Tower(0, 0, 70, 10)
+    tower2 = Tower(75, 75, 70, 10)
     ax.scatter(tower.x,tower.y,tower.z, color = 'g', s=50)
+    ax.scatter(tower2.x,tower2.y,tower2.z, color = 'r', s=50)
 
     """ Rays setup"""
     rays = tower.create_rays()
@@ -426,7 +433,7 @@ if __name__ == "__main__":
 
     """Grid of mirrors setup"""
     #Change the first parameter to one of the equations to alter the pattern of the mirror field
-    grid = Grid(circle_eq, 75, 75, 2.5, 2.5)
+    grid = Grid(all_mirrors, 75, 75, 2.5, 2.5)
     mirrors = grid.create_mirrors(0, 10, 10, 0, 0, 0, 0.5)
 
     """Calculations and plotting"""
@@ -436,8 +443,8 @@ if __name__ == "__main__":
             Use the first line to point all of the mirrors to any point, leave the 4th value at 0
             Use the second line to point rays to any point WIP not 100% sure this works yet
             """
-            mirror.point_to_tower([tower.x, tower.y, tower.z, 0])
-            #mirror.ray_to_tower(tower, sun)
+            #mirror.point_to_tower([tower2.x, tower2.y, tower2.z, 0])
+            mirror.ray_to_tower(tower2, tower)
 
             try:
                 ax.plot_trisurf(mirror.plot_values[0], mirror.plot_values[1], mirror.plot_values[2], color = 'r', alpha = mirror.reflectivity) 
@@ -462,7 +469,7 @@ if __name__ == "__main__":
                    and whether it hit a mirror (green) or not (red)
                 """
                 # print(f"Ray {ray.id} hit mirror {ray.mirror_hit}")
-                ax.quiver(ray.origin[0], ray.origin[1], ray.origin[2], ray.direction[0], ray.direction[1], ray.direction[2], color = 'b', length = ray.magnitude, arrow_length_ratio = 0.1)
+                #ax.quiver(ray.origin[0], ray.origin[1], ray.origin[2], ray.direction[0], ray.direction[1], ray.direction[2], color = 'b', length = ray.magnitude, arrow_length_ratio = 0.1)
                 #ax.scatter(ray.intersection_point[0], ray.intersection_point[1], ray.intersection_point[2], color='g')
                 useable_rays.append([ray, hit_check[1]])
             else:
@@ -475,10 +482,7 @@ if __name__ == "__main__":
     with alive_bar(len(useable_rays)) as bar:
         for ray in useable_rays:
             Ray.reflect(ray[0], ray[0].mirror_hit)
-            lx = (tower.x-ray[1][0])/ray[0].direction[0]
-            ly = (tower.y-ray[1][1])/ray[0].direction[1]
-            lz = (tower.z-ray[1][2])/ray[0].direction[2]
-            ax.quiver(ray[1][0], ray[1][1], ray[1][2], ray[0].direction[0], ray[0].direction[1], ray[0].direction[2], color = 'g', length = ray[0].magnitude, arrow_length_ratio = 0.1)
+            #ax.quiver(ray[1][0], ray[1][1], ray[1][2], ray[0].direction[0], ray[0].direction[1], ray[0].direction[2], color = 'g', length = 1.5*ray[0].magnitude, arrow_length_ratio = 0.1)
             bar()
 
     print(f"{len(useable_rays)} rays were plotted")
