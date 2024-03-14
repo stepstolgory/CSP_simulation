@@ -7,7 +7,8 @@ import random
 """TODO: Create a function to reflect the light rays from the mirrors.
          This function needs to calculate the direction of the ray and whether it intersects with the Sun mirror 
          Test the created function thoroughly
-         Test Seans idea   
+         Test Seans idea  
+         Change the mirror generation to start from a normal vector, rather than from points
          """
         
 
@@ -41,52 +42,68 @@ class Mirror():
         self.theta_y = theta_y
         self.theta_z = theta_z
 
+        self._normal_vector = np.array([0,0,1, 0])
+        self._vectors = np.array([[np.sqrt(2)/2, np.sqrt(2)/2, 0, 0], [np.sqrt(2)/2, -np.sqrt(2)/2, 0, 0]])
+
         #Non rotated verteces of the mirror
-        self.points = np.array([[x,y,z,1],[x-x_len/2,y-y_len/2,z,1],[x-x_len/2, y+y_len/2, z,1],[x+x_len/2, y-y_len/2, z,1],[x+x_len/2, y+y_len/2, z,1]])
         self.reflectivity = reflectivity
 
         self.id = id
     
     @property
     def vectors(self):
-        """
-        The cross product is found with these vectors
-        The vectors are from bottom left corner to centre and top left corner to centre
-        """
-        vector1 = self.rotated_points[1]-self.pos
-        vector1 = vector1/np.linalg.norm(vector1)
-        vector2 = self.rotated_points[2]-self.pos
-        vector2 = vector2/np.linalg.norm(vector2)
-        return vector1, vector2
+        """Returns the corner vectors of the mirror"""
+        return self._vectors
+
+    @vectors.setter
+    def vectors(self, value):
+        self._vectors=value
 
     @property
     def pos(self): 
         """Returns the centre of the mirror as a quaternion"""
         return np.array([self.x, self.y, self.z, 1])
     
-    @property
-    def rotated_points(self): 
-        """Returns the rotated points
-           Rotation done by translating the point to the origin, rotating it and then translating it back"""
+    # @property
+    # def rotated_points(self): 
+    #     """Returns the rotated points
+    #        Rotation done by translating the point to the origin, rotating it and then translating it back"""
+    #     T1 = self.T(-self.x, -self.y, -self.z)
+    #     T2 = self.T(self.x, self.y, self.z)
+    #     M = np.dot(T2, np.dot(self.R, T1))
+    #     rotated_points = [np.dot(M, point) for point in self.points] 
+    #     return rotated_points
+    
+    """WIP: Test Function"""
+    def rotate_vectors(self): 
         T1 = self.T(-self.x, -self.y, -self.z)
         T2 = self.T(self.x, self.y, self.z)
         M = np.dot(T2, np.dot(self.R, T1))
-        rotated_points = [np.dot(M, point) for point in self.points] 
-        return rotated_points
+        self.vectors = [np.dot(M, vector) for vector in self.vectors] 
+        self.normal_vector = np.dot(M, self.normal_vector)
     
     @property
     def normal_vector(self):
-        """Finds and normalises the normal vector"""
-        normal = np.cross(np.delete(self.vectors[1],3), np.delete(self.vectors[0],3))
-        return normal/np.linalg.norm(normal)
+        return self._normal_vector
+    
+    @normal_vector.setter
+    def normal_vector(self, value):
+        self._normal_vector = value
 
     @property
     def plot_values(self): 
         """Returns the values needed to plot the mirror as a square using trisurface as three separate lists of x, y, z values"""
-        x_vals = [point[0] for point in self.rotated_points]
-        y_vals = [point[1] for point in self.rotated_points]
-        z_vals = [point[2] for point in self.rotated_points]
+        x_vals = [point[0] for point in self.points]
+        y_vals = [point[1] for point in self.points]
+        z_vals = [point[2] for point in self.points]
         return np.array([x_vals, y_vals, z_vals])
+    
+    @property
+    def points(self):
+        mult_factor = np.sqrt((self.x_len/2)**2+(self.y_len/2)**2)
+        points = np.array([self.pos, self.pos+self.vectors[0]*mult_factor+np.array([0,0,0,1]),self.pos+ self.vectors[0]*-mult_factor+np.array([0,0,0,1]), self.pos+self.vectors[1]*mult_factor+np.array([0,0,0,1]), self.pos+self.vectors[1]*-mult_factor+np.array([0,0,0,1])])
+        return points
+
 
     def axis_rotation(self, axis, ang):
         """Performs a rotation about any given axis by a given angle"""
@@ -144,23 +161,21 @@ class Mirror():
         """
         tower = tower - np.array([self.x, self.y, self.z, 0])
         norm_tower = np.delete(tower/np.linalg.norm(tower), 3)
-        axis = np.cross(self.normal_vector, norm_tower)
-        ang = np.arccos(np.dot(norm_tower, self.normal_vector))
+        axis = np.cross(np.delete(self.normal_vector, 3), norm_tower,)
+        ang = np.arccos(np.dot(norm_tower, np.delete(self.normal_vector, 3)))
         value = self.axis_rotation(axis, ang)
         self.R = value
+        self.rotate_vectors()
+
 
     """WIP - This is a test of what Sean wrote ages ago for pointing a ray to tower"""
     def ray_to_tower(self, tower, sun):
-        theta = np.arctan((tower.y+sun.y-2*self.y)/(tower.x+sun.x-2*self.x))
-        phi = np.arctan(np.sqrt((tower.x+sun.x-2*self.x)**2+(tower.y+sun.y-2*self.y)**2)/(tower.z+sun.z-2*self.z))
+        self.theta_y = np.arctan((tower.y+sun.y-2*self.y)/(tower.x+sun.x-2*self.x))
+        self.theta_z = np.arctan(np.sqrt((tower.x+sun.x-2*self.x)**2+(tower.y+sun.y-2*self.y)**2)/(tower.z+sun.z-2*self.z))
         
-        y_axis = np.array([0,1,0])
-        z_axis = np.array([0,0,1])
-        
-        y_rotation = self.axis_rotation(y_axis, theta)
-        z_rotation = self.axis_rotation(z_axis, phi)
-
-        self.R = np.dot(y_rotation, z_rotation)
+        # y_rotation = self.axis_rotation(y_axis, theta)
+        self.R = np.dot(self.Ry, self.Rz)
+        self.rotate_vectors()
 
     def __str__(self):
         return(f"Mirror {self.id} at position ({self.x}, {self.y}, {self.z}), dimension {self.x_len, self.y_len}, rotation  of {self.theta_x, self.theta_y, self.theta_z} radians about x, y, z axis respectively.")
@@ -227,7 +242,7 @@ class Tower():
         """Gives the origin coordinates for rays just below the tower"""
         ray_coordinates = []
         for (x,y) in self.grid_space:
-            coord = np.array([x+self.x,y+self.y,(self.z-self.g_height)])
+            coord = np.array([x+self.x,y+self.y,(self.z-self.g_height), 1])
             ray_coordinates.append(coord)
         return ray_coordinates
 
@@ -240,10 +255,10 @@ class Tower():
         j = 0
         for coordinate in self.ray_coordinates: 
             j+=1
-            direction = coordinate - np.array([self.x, self.y, self.z])
+            direction = coordinate - np.array([self.x, self.y, self.z, 0])
             direction = direction/np.linalg.norm(direction)
             magnitude = 1
-            self.rays.append(Ray(np.array([coordinate[0],coordinate[1],self.z]), direction, magnitude, j))
+            self.rays.append(Ray(np.array([coordinate[0],coordinate[1],self.z, 1]), direction, magnitude, j))
         print(f"{j} rays were created")
         return self.rays
 
@@ -305,7 +320,7 @@ class Ray():
         Used to check whether the ray hits the mirror
         """
         if np.dot(self.direction, mirror.normal_vector) != 0:
-            d = np.dot(np.array([mirror.x, mirror.y, mirror.z])-self.origin, mirror.normal_vector)/(np.dot(self.direction, mirror.normal_vector))
+            d = np.dot(mirror.pos-self.origin, mirror.normal_vector)/(np.dot(self.direction, mirror.normal_vector))
             point = self.origin + d*self.direction
             return point
 
@@ -358,15 +373,17 @@ class Ray():
         Uses the same axis rotation matrix as the 'point_to_tower' method of the mirror class
         WIP - needs more testing
         """
+        print(mirror.normal_vector)
         incidence_angle = np.arccos(np.dot(ray.direction, mirror.normal_vector))
         rotation_angle = (np.pi - 2*incidence_angle)
-        axis = np.cross(ray.direction, mirror.normal_vector)
+        axis = np.cross(np.delete(ray.direction, 3), np.delete(mirror.normal_vector,3))
         x = axis[0]
         y = axis[1]
         z = axis[2]
-        reflection_matrix = np.array([[x*x*(1-np.cos(rotation_angle))+np.cos(rotation_angle), y*x*(1-np.cos(rotation_angle))-z*np.sin(rotation_angle), z*x*(1-np.cos(rotation_angle))+y*np.sin(rotation_angle)],
-                            [x*y*(1-np.cos(rotation_angle))+z*np.sin(rotation_angle), y*y*(1-np.cos(rotation_angle))+np.cos(rotation_angle), z*y*(1-np.cos(rotation_angle))-x*np.sin(rotation_angle)],
-                            [x*z*(1-np.cos(rotation_angle)) - y*np.sin(rotation_angle),  y*z*(1 - np.cos(rotation_angle)) + x*np.sin(rotation_angle), z*z*(1 - np.cos(rotation_angle)) + np.cos(rotation_angle)]])
+        reflection_matrix = np.array([[x*x*(1-np.cos(rotation_angle))+np.cos(rotation_angle), y*x*(1-np.cos(rotation_angle))-z*np.sin(rotation_angle), z*x*(1-np.cos(rotation_angle))+y*np.sin(rotation_angle),0],
+                            [x*y*(1-np.cos(rotation_angle))+z*np.sin(rotation_angle), y*y*(1-np.cos(rotation_angle))+np.cos(rotation_angle), z*y*(1-np.cos(rotation_angle))-x*np.sin(rotation_angle),0],
+                            [x*z*(1-np.cos(rotation_angle)) - y*np.sin(rotation_angle),  y*z*(1 - np.cos(rotation_angle)) + x*np.sin(rotation_angle), z*z*(1 - np.cos(rotation_angle)) + np.cos(rotation_angle),0],
+                            [0,0,0,1]])
         ray.direction = np.dot(ray.direction, reflection_matrix)
 
     def __str__(self):
@@ -415,6 +432,7 @@ if __name__ == "__main__":
     circle_eq = '52.5**2 >= x**2+y**2 >= 20**2'
     square_eq = 'np.abs(x) > 45 or np.abs(y) > 45'
 
+
     """Sun setup"""
     sun = Sun(360, 1220, 10, 100, 0, 200, 150, 150, 0, 0, 0, 1, 0)
     sun.R = np.dot(sun.Rz,np.dot(sun.Rx, sun.Ry))
@@ -443,8 +461,8 @@ if __name__ == "__main__":
             Use the first line to point all of the mirrors to any point, leave the 4th value at 0
             Use the second line to point rays to any point WIP not 100% sure this works yet
             """
-            #mirror.point_to_tower([tower2.x, tower2.y, tower2.z, 0])
-            mirror.ray_to_tower(tower2, tower)
+            #mirror.point_to_tower([tower.x, tower.y, tower.z, 0])
+            mirror.ray_to_tower(tower, tower2)
 
             try:
                 ax.plot_trisurf(mirror.plot_values[0], mirror.plot_values[1], mirror.plot_values[2], color = 'r', alpha = mirror.reflectivity) 
@@ -482,7 +500,7 @@ if __name__ == "__main__":
     with alive_bar(len(useable_rays)) as bar:
         for ray in useable_rays:
             Ray.reflect(ray[0], ray[0].mirror_hit)
-            #ax.quiver(ray[1][0], ray[1][1], ray[1][2], ray[0].direction[0], ray[0].direction[1], ray[0].direction[2], color = 'g', length = 1.5*ray[0].magnitude, arrow_length_ratio = 0.1)
+            ax.quiver(ray[1][0], ray[1][1], ray[1][2], ray[0].direction[0], ray[0].direction[1], ray[0].direction[2], color = 'g', length = 1.5*ray[0].magnitude, arrow_length_ratio = 0.1)
             bar()
 
     print(f"{len(useable_rays)} rays were plotted")
