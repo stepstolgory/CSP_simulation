@@ -17,4 +17,3 @@ for x in xs:
 
 stationary_points = [e for e in points1 if e in points2]
 print(stationary_points)
-

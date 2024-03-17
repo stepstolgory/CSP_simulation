@@ -176,6 +176,17 @@ class Mirror():
         # y_rotation = self.axis_rotation(y_axis, theta)
         self.R = np.dot(self.Ry, self.Rz)
         self.rotate_vectors()
+    
+    """WIP: Testing a way to do this"""
+    def  test_pointing(self, tower, sun):
+        tower = 1/2 * np.array([sun.x-tower.x, sun.y-tower.y, 0])+np.array([0, 0, tower.z])
+        tower = tower - np.array([self.x, self.y, self.z,])
+        norm_tower =  tower/np.linalg.norm(tower)
+        axis = np.cross(np.delete(self.normal_vector, 3), norm_tower,)
+        ang = np.arccos(np.dot(norm_tower, np.delete(self.normal_vector, 3)))
+        value = self.axis_rotation(axis, ang)
+        self.R = value
+        self.rotate_vectors()
 
     def __str__(self):
         return(f"Mirror {self.id} at position ({self.x}, {self.y}, {self.z}), dimension {self.x_len, self.y_len}, rotation  of {self.theta_x, self.theta_y, self.theta_z} radians about x, y, z axis respectively.")
@@ -233,7 +244,7 @@ class Tower():
         self.z = z
         self.g_height = g_height
         """Change the values in 'create_grid_space' to alter density of rays"""
-        self.grid_space = Grid('True', np.sqrt(75**2+x**2)/(z/g_height), np.sqrt(75**2+x**2)/(z/g_height), 0, 0).create_grid_space(1,1)
+        self.grid_space = Grid('True', (75+x)/(z/g_height), (75+y)/(z/g_height), 0, 0).create_grid_space(1,1)
     
     rays = []
         
@@ -245,6 +256,10 @@ class Tower():
             coord = np.array([x+self.x,y+self.y,(self.z-self.g_height), 1])
             ray_coordinates.append(coord)
         return ray_coordinates
+
+    @property
+    def pos(self):
+        return np.array([self.x, self.y, self.z])
 
     def create_rays(self): 
         """
@@ -373,7 +388,6 @@ class Ray():
         Uses the same axis rotation matrix as the 'point_to_tower' method of the mirror class
         WIP - needs more testing
         """
-        print(mirror.normal_vector)
         incidence_angle = np.arccos(np.dot(ray.direction, mirror.normal_vector))
         rotation_angle = (np.pi - 2*incidence_angle)
         axis = np.cross(np.delete(ray.direction, 3), np.delete(mirror.normal_vector,3))
@@ -441,12 +455,12 @@ if __name__ == "__main__":
 
     """Tower setup"""
     tower = Tower(0, 0, 70, 10)
-    tower2 = Tower(75, 75, 70, 10)
+    tower2 = Tower(30, 30, 200, 200/7)
     ax.scatter(tower.x,tower.y,tower.z, color = 'g', s=50)
     ax.scatter(tower2.x,tower2.y,tower2.z, color = 'r', s=50)
 
     """ Rays setup"""
-    rays = tower.create_rays()
+    rays = tower2.create_rays()
     useable_rays = []
 
     """Grid of mirrors setup"""
@@ -461,9 +475,10 @@ if __name__ == "__main__":
             Use the first line to point all of the mirrors to any point, leave the 4th value at 0
             Use the second line to point rays to any point WIP not 100% sure this works yet
             """
-            #mirror.point_to_tower([tower.x, tower.y, tower.z, 0])
-            mirror.ray_to_tower(tower, tower2)
 
+            #mirror.point_to_tower([tower.x, tower.y, tower.z, 0])
+            #mirror.ray_to_tower(tower, tower2)
+            mirror.test_pointing(tower, tower2)
             try:
                 ax.plot_trisurf(mirror.plot_values[0], mirror.plot_values[1], mirror.plot_values[2], color = 'r', alpha = mirror.reflectivity) 
             except RuntimeError:
@@ -472,9 +487,10 @@ if __name__ == "__main__":
                 But that gives a RuntimeError
                 As this mirror is technically inside of the tower, the mirror is removed.
                 """
-                mirrors = np.delete(mirrors, mirror.id - 1)
+                index = np.argwhere(mirrors==mirror)
+                mirrors = np.delete(mirrors, index)
                 print(f"Run time error for {mirror}")
-    
+
     with alive_bar(len(rays)) as bar:
         for ray in rays:
             hit_check = ray.is_mirror_hit(mirrors)
@@ -500,7 +516,8 @@ if __name__ == "__main__":
     with alive_bar(len(useable_rays)) as bar:
         for ray in useable_rays:
             Ray.reflect(ray[0], ray[0].mirror_hit)
-            ax.quiver(ray[1][0], ray[1][1], ray[1][2], ray[0].direction[0], ray[0].direction[1], ray[0].direction[2], color = 'g', length = 1.5*ray[0].magnitude, arrow_length_ratio = 0.1)
+            mag = np.linalg.norm(tower.pos-np.delete(ray[0].mirror_hit.pos,3))
+            ax.quiver(ray[1][0], ray[1][1], ray[1][2], ray[0].direction[0], ray[0].direction[1], ray[0].direction[2], color = 'g', length = mag, arrow_length_ratio = 0.1)
             bar()
 
     print(f"{len(useable_rays)} rays were plotted")
